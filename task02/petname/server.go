@@ -85,6 +85,5 @@ func main() {
 
 	if err := s.Serve(listener); err != nil {
 		slog.Error("petname: failed to serve", "error", err)
-		return
 	}
 }
