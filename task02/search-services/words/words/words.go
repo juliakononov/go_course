@@ -2,25 +2,26 @@ package words
 
 import (
 	"maps"
-	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/kljensen/snowball/english"
 )
 
-var re = regexp.MustCompile(`[^a-z0-9]+`)
-
 func Normalize(phrase string) []string {
-	words := re.Split(strings.ToLower(phrase), -1)
-	seen := make(map[string]struct{})
+	seen := make(map[string]bool)
+
+	words := strings.FieldsFunc(phrase, func(r rune) bool {
+		return !unicode.IsDigit(r) && !unicode.IsLetter(r)
+	})
 
 	for _, word := range words {
-		if word == "" || english.IsStopWord(word) {
+		word := strings.ToLower(word)
+		if english.IsStopWord(word) {
 			continue
 		}
-
-		seen[english.Stem(word, true)] = struct{}{}
+		seen[english.Stem(word, false)] = true
 	}
 
 	return slices.Collect(maps.Keys(seen))
