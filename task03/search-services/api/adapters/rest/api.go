@@ -47,13 +47,17 @@ func NewWordsHandler(log *slog.Logger, norm core.Normalizer) http.HandlerFunc {
 		}
 
 		words, err := norm.Norm(r.Context(), phrase)
+
 		if err != nil {
 			log.Error("failed to normalize", "phrase_len", len(phrase), "error", err)
-			if errors.Is(err, core.ErrBadArguments) {
-				http.Error(w, "phrase too large", http.StatusBadRequest)
-				return
+			switch {
+			case errors.Is(err, core.ErrBadArguments):
+				http.Error(w, "phrase too large or invalid", http.StatusBadRequest)
+			case errors.Is(err, core.ErrServiceUnavailable):
+				http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+			default:
+				http.Error(w, "internal error", http.StatusInternalServerError)
 			}
-			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 

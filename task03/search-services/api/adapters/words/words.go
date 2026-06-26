@@ -36,10 +36,14 @@ func (c Client) Norm(ctx context.Context, phrase string) ([]string, error) {
 	reply, err := c.client.Norm(ctx, &wordspb.WordsRequest{Phrase: phrase})
 	if err != nil {
 		c.log.Error("norm failed", "phrase_len", len(phrase), "error", err)
-		if status.Code(err) == codes.ResourceExhausted {
+		switch status.Code(err) {
+		case codes.ResourceExhausted, codes.InvalidArgument:
 			return nil, core.ErrBadArguments
+		case codes.Unavailable:
+			return nil, core.ErrServiceUnavailable
+		default:
+			return nil, core.ErrInternal
 		}
-		return nil, err
 	}
 	return reply.GetWords(), nil
 }
