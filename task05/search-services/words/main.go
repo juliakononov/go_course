@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
+	"log/slog"
 	"net"
 	"strconv"
 
@@ -49,20 +49,32 @@ func main() {
 	flag.Parse()
 
 	var cfg Config
-	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
-		panic(err)
+
+	if configPath != "" {
+		if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
+			slog.Error("words: cannot read config", "error", err)
+			return
+		}
+	} else {
+		if err := cleanenv.ReadEnv(&cfg); err != nil {
+			slog.Error("words: cannot read env", "error", err)
+			return
+		}
 	}
 
 	listener, err := net.Listen("tcp", cfg.Address)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		slog.Error("words: failed to listen", "error", err)
+		return
 	}
+
+	slog.Info("words: starting server", "addr", cfg.Address)
 
 	s := grpc.NewServer()
 	wordspb.RegisterWordsServer(s, &server{})
 	reflection.Register(s)
 
 	if err := s.Serve(listener); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		slog.Error("words: failed to serve", "error", err)
 	}
 }
