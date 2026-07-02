@@ -3,6 +3,7 @@ module yadro.com/course
 go 1.24.0
 
 require (
+	github.com/kljensen/snowball v0.10.0
 	google.golang.org/grpc v1.69.2
 	google.golang.org/protobuf v1.35.1
 )
