@@ -5,7 +5,11 @@ import (
 	"log/slog"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"yadro.com/course/api/core"
 	wordspb "yadro.com/course/proto/words"
 )
 
@@ -21,14 +25,31 @@ func NewClient(address string, log *slog.Logger) (*Client, error) {
 	}
 	return &Client{
 		client: wordspb.NewWordsClient(conn),
-		log:    log,
+		log:    log.With("component", "words-adapter"),
 	}, nil
 }
 
 func (c Client) Norm(ctx context.Context, phrase string) ([]string, error) {
-	return nil, nil
+	reply, err := c.client.Norm(ctx, &wordspb.WordsRequest{Phrase: phrase})
+	if err != nil {
+		c.log.Error("norm failed", "phrase_len", len(phrase), "error", err)
+		switch status.Code(err) {
+		case codes.ResourceExhausted, codes.InvalidArgument:
+			return nil, core.ErrBadArguments
+		case codes.Unavailable:
+			return nil, core.ErrServiceUnavailable
+		default:
+			return nil, core.ErrInternal
+		}
+	}
+	return reply.GetWords(), nil
 }
 
 func (c Client) Ping(ctx context.Context) error {
+	_, err := c.client.Ping(ctx, &emptypb.Empty{})
+	if err != nil {
+		c.log.Error("ping failed", "error", err)
+		return err
+	}
 	return nil
 }
