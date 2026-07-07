@@ -38,8 +38,9 @@ func (s *Service) Update(ctx context.Context) (err error) {
 	if !s.isRunning.CompareAndSwap(false, true) {
 		return ErrAlreadyExists
 	}
-	s.log.Info("update started")
 	defer s.isRunning.Store(false)
+
+	s.log.Info("update started")
 
 	missing, err := s.missingIDs(ctx)
 	if err != nil {
@@ -87,15 +88,13 @@ func (s *Service) fetchAll(ctx context.Context, missing []int) {
 	tasks := make(chan int)
 
 	for i := 0; i < s.concurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for id := range tasks {
 				if err := s.addComics(ctx, id); err != nil {
 					s.log.Error("failed to add comics", "id", id, "error", err)
 				}
 			}
-		}()
+		})
 	}
 
 	for _, id := range missing {
@@ -162,6 +161,11 @@ func (s *Service) Status(ctx context.Context) ServiceStatus {
 }
 
 func (s *Service) Drop(ctx context.Context) error {
+	if !s.isRunning.CompareAndSwap(false, true) {
+		return ErrAlreadyExists
+	}
+	defer s.isRunning.Store(false)
+
 	s.log.Info("dropping database")
 	return s.db.Drop(ctx)
 }
