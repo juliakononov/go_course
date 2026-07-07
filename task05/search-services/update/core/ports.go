@@ -1,8 +1,6 @@
 package core
 
-import (
-	"context"
-)
+import	"context"
 
 type Updater interface {
 	Update(context.Context) error
