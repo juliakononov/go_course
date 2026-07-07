@@ -10,6 +10,7 @@ import (
 	"os/signal"
 
 	"yadro.com/course/api/adapters/rest"
+	"yadro.com/course/api/adapters/search"
 	"yadro.com/course/api/adapters/update"
 	"yadro.com/course/api/adapters/words"
 	"yadro.com/course/api/config"
@@ -40,16 +41,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	searchClient, err := search.NewClient(cfg.SearchAddress, log)
+	if err != nil {
+		log.Error("cannot init search adapter", "error", err)
+		os.Exit(1)
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/ping", rest.NewPingHandler(log, map[string]core.Pinger{
 		"words":  wordsClient,
 		"update": updateClient,
+		"search": searchClient,
 	}))
 	mux.Handle("GET /api/words", rest.NewWordsHandler(log, wordsClient))
 	mux.Handle("POST /api/db/update", rest.NewUpdateHandler(log, updateClient))
 	mux.Handle("GET /api/db/stats", rest.NewUpdateStatsHandler(log, updateClient))
 	mux.Handle("GET /api/db/status", rest.NewUpdateStatusHandler(log, updateClient))
 	mux.Handle("DELETE /api/db", rest.NewDropHandler(log, updateClient))
+	mux.Handle("GET /api/search", rest.NewSearchHandler(log, searchClient))
 
 	server := http.Server{
 		Addr:        cfg.HTTPConfig.Address,
@@ -89,6 +98,6 @@ func mustMakeLogger(logLevel string) *slog.Logger {
 	default:
 		panic("unknown log level: " + logLevel)
 	}
-	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level, AddSource: true})
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
 	return slog.New(handler)
 }

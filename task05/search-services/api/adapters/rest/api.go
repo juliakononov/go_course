@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"yadro.com/course/api/core"
 )
@@ -17,6 +18,15 @@ type WordsResponse struct {
 	Words []string `json:"words"`
 	Total int      `json:"total"`
 }
+type Comics struct {
+	ID  int    `json:"id"`
+	URL string `json:"url"`
+}
+
+type SearchResponse struct {
+	Comics []Comics `json:"comics"`
+	Total  int      `json:"total"`
+}
 
 type StatusResponse struct {
 	Status string `json:"status"`
@@ -28,6 +38,8 @@ type StatsResponse struct {
 	ComicsFetched int `json:"comics_fetched"`
 	ComicsTotal   int `json:"comics_total"`
 }
+
+const searchLimit = 10
 
 func NewPingHandler(log *slog.Logger, pingers map[string]core.Pinger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -150,5 +162,58 @@ func NewDropHandler(log *slog.Logger, updater core.Updater) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func NewSearchHandler(log *slog.Logger, searcher core.Searcher) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		phrase := r.URL.Query().Get("phrase")
+		if phrase == "" {
+			http.Error(w, "empty phrase", http.StatusBadRequest)
+			return
+		}
+
+		strLimit := r.URL.Query().Get("limit")
+		if strLimit == "" {
+			strLimit = strconv.Itoa(searchLimit)
+		}
+
+		limit, err := strconv.Atoi(strLimit)
+		if err != nil {
+			http.Error(w, "limit must be int", http.StatusBadRequest)
+			return
+		}
+
+		if limit < 1 {
+			http.Error(w, "limit must be greater than 0", http.StatusBadRequest)
+			return
+		}
+
+		reply, err := searcher.Search(r.Context(), phrase, limit)
+		if err != nil {
+			log.Error("search failed", "phrase_len", len(phrase), "limit", limit, "error", err)
+			switch {
+			case errors.Is(err, core.ErrBadArguments):
+				http.Error(w, "phrase too large or invalid", http.StatusBadRequest)
+			case errors.Is(err, core.ErrServiceUnavailable):
+				http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+			default:
+				http.Error(w, "internal error", http.StatusInternalServerError)
+			}
+			return
+		}
+
+		comics := make([]Comics, 0, len(reply))
+		for _, c := range reply {
+			comics = append(comics, Comics{ID: int(c.ID), URL: c.URL})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(SearchResponse{
+			Comics: comics,
+			Total:  len(comics),
+		}); err != nil {
+			log.Error("failed to encode response", "error", err)
+		}
 	}
 }
