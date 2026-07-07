@@ -78,4 +78,3 @@ func (db *DB) Drop(ctx context.Context) error {
 	_, err := db.conn.ExecContext(ctx, "DELETE FROM comics")
 	return err
 }
-
